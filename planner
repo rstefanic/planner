@@ -1,0 +1,80 @@
+#!/bin/bash
+
+display_help() {
+    echo "Usage: $0 {new|outstanding|copy|complete|reject} [task_number]" >&2
+    echo
+    echo "   new                       Create a new plan file for today"
+    echo "   outstanding               List all tasks left and their task number"
+    echo "   copy [task_number]        Copy a task to today"
+    echo "   complete [task_number]    Mark a task as complete"
+    echo "   reject [task_number]      Decide against doing a task"
+    echo
+    exit 1
+}
+
+get_outstanding_tasks() {
+    grep --no-filename "^[^*+=-]" *.txt | sort -u
+}
+
+create_new_file() {
+    echo "== $(date +%F) ==" >> $1
+    echo "" >> $1
+}
+
+if [ $# -gt 0 ]; then
+    filename="plan_$(date +%F).txt"
+
+    if [ "$1" == "new" ]; then
+       if [ -f $filename ]; then
+            echo "Planner for $(date +%F) already exists." >&2
+            exit 1
+        fi
+
+        create_new_file $filename
+        exit 0
+    elif  [ "$1" == "outstanding" ]; then
+        echo
+        echo "    Outstanding Tasks"
+        echo
+        get_outstanding_tasks | nl
+        exit 0
+    elif [ "$1" == "complete" ]; then
+        shift 1
+
+        # Get task by line number and mark it as complete
+        task="$(get_outstanding_tasks | sed -n $@p)"
+        replace='s/^'$task'/+ '$task'/g'
+        sed -i '' "$replace" *.txt
+
+        # If it was done today, then mark it as done today
+        if [ -f $filename ]; then
+            replace='s/^+ '$task'/* '$task'/g'
+            sed -i '' "$replace" $filename
+        fi
+        exit 0
+    elif [ "$1" == "copy" ]; then
+        shift 1
+
+        task="$(get_outstanding_tasks | sed -n $@p)"
+
+        if [ !  -f $filename ]; then
+            create_new_file $filename
+        fi
+
+        echo "$task" >> $filename
+        exit 0
+    elif [ "$1" == "reject" ]; then
+        shift 1
+
+        # Get task by line number
+        task="$(get_outstanding_tasks | sed -n $@p)"
+        replace='s/^'$task'/- '$task'/g'
+        sed -i '' "$replace" *.txt
+        exit 0
+    fi
+
+    echo "No command for \"$@\"." >&2
+    display_help
+else
+    display_help
+fi
